@@ -554,16 +554,12 @@ static void __noinline render_text_mode_scanline(scanvideo_scanline_buffer_t *bu
 }
 #endif
 
-static void __scratch_x("scanlines") scanline_func_double(uint32_t *dest, int scanline) {
-    if (scanline < MAIN_VIEWHEIGHT) {
-        const uint8_t *src = frame_buffer[display_frame_index] + scanline * SCREENWIDTH;
+static void __not_in_flash_func(scanline_func_double)(uint32_t *dest, int scanline) {
+    const uint8_t *src = frame_buffer[display_frame_index] + scanline * SCREENWIDTH;
 //        if (scanline == 100) {
 //            printf("SL %d %p\n", display_frame_index, &frame_buffer[display_frame_index]);
 //        }
-        palette_convert_scanline(dest, src);
-    } else {
-        // we expect everything to be overdrawn by statusbar so we do nothing
-    }
+    palette_convert_scanline(dest, src);
 }
 
 static void __not_in_flash_func(scanline_func_single)(uint32_t *dest, int scanline) {
@@ -993,7 +989,9 @@ void __scratch_x("scanlines") fill_scanlines() {
         if (display_video_type != VIDEO_TYPE_TEXT) {
             // we don't have text mode -> normal transition yet, but we may for network game, so leaving this here - we would need to put the buffer pointers back
             assert (buffer->data < text_scanline_buffer_start || buffer->data >= text_scanline_buffer_start + TEXT_SCANLINE_BUFFER_TOTAL_WORDS);
-            scanline_funcs[display_video_type](buffer->data+1, scanline);
+            if (display_video_type != VIDEO_TYPE_DOUBLE || scanline < MAIN_VIEWHEIGHT) {
+              scanline_funcs[display_video_type](buffer->data+1, scanline);
+            }
             if (display_video_type >= FIRST_VIDEO_TYPE_WITH_OVERLAYS) {
                 assert(scanline < count_of(vpatchlists->vpatch_starters));
                 int prev = 0;
@@ -1045,10 +1043,15 @@ void __scratch_x("scanlines") fill_scanlines() {
 #endif
         }
         scanvideo_end_scanline_generation(buffer);
+
+        // If we are in the performance critical status bar section of the frame
+        // then always block waiting for the next scanline so we ensure we
+        // start on the next buffer as quickly as possible.
+        bool block = scanline >= MAIN_VIEWHEIGHT && display_video_type == VIDEO_TYPE_DOUBLE;
 #if SUPPORT_TEXT
-        buffer = scanvideo_begin_scanline_generation_linked(display_video_type == VIDEO_TYPE_TEXT ? 2 : 1, false);
+        buffer = scanvideo_begin_scanline_generation_linked(display_video_type == VIDEO_TYPE_TEXT ? 2 : 1, block);
 #else
-        buffer = scanvideo_begin_scanline_generation(false);
+        buffer = scanvideo_begin_scanline_generation(block);
 #endif
     }
 #if USE_INTERP
