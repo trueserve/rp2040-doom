@@ -942,8 +942,12 @@ void __noinline new_frame_init_overlays_palette_and_wipe() {
     }
 }
 
+#if PICO_ON_DEVICE
 // this method moved out of scratchx because we didn't have quite enough space for core1 stack
 void __no_inline_not_in_flash_func(new_frame_stuff)() {
+#else
+void new_frame_stuff() {
+#endif
     // this part of the per frame code is in RAM as it is needed during save
     if (sem_available(&render_frame_ready)) {
         sem_acquire_blocking(&render_frame_ready);

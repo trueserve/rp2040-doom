@@ -443,7 +443,12 @@ static boolean I_Pico_InitSound(boolean _use_sfx_prefix)
     gpio_set_drive_strength(PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, GPIO_DRIVE_STRENGTH_12MA);
 #endif
     // we want to pass thr
+#if PICO_ON_DEVICE
     bool ok = audio_i2s_connect_extra(producer_pool, false, 0, 0, NULL);
+#else
+    bool ok = audio_i2s_connect(producer_pool);
+#endif
+
     assert(ok);
     audio_i2s_set_enabled(true);
 
